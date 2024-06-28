@@ -6,8 +6,11 @@ import path from 'path';
 import dbClient from './utils/db';
 
 const fileQueue = new Queue('fileQueue');
+const userQueue = new Queue('userQueue');
+
 const FOLDER_PATH = process.env.FOLDER_PATH || '/tmp/files_manager';
 
+// Worker for file processing
 fileQueue.process(async (job, done) => {
   const { fileId, userId } = job.data;
 
@@ -44,3 +47,24 @@ fileQueue.process(async (job, done) => {
     done(error);
   }
 });
+
+// Worker for sending welcome emails
+userQueue.process('sendWelcomeEmail', async (job) => {
+  const { userId } = job.data;
+
+  if (!userId) {
+    throw new Error('Missing userId');
+  }
+
+  const user = await dbClient.usersCollection.findOne({ _id: new ObjectId(userId) });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  console.log(`Welcome ${user.email}!`);
+
+  return true;
+});
+
+export { fileQueue, userQueue };
