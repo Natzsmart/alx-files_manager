@@ -4,8 +4,10 @@ import path from 'path';
 import redisClient from '../utils/redis';
 import dbClient from '../utils/db';
 import { ObjectId } from 'mongodb';
+import Queue from 'bull';
 
 
+const fileQueue = new Queue('fileQueue');
 const FOLDER_PATH = process.env.FOLDER_PATH || '/tmp/files_manager';
 
 class FilesController {
@@ -53,6 +55,10 @@ class FilesController {
     if (type === 'folder') {
       const result = await dbClient.filesCollection.insertOne(fileData);
       return res.status(201).json({ id: result.insertedId, ...fileData });
+    }
+
+    if (type === 'image') {
+        await fileQueue.add({ userId, fileId: file._id });
     }
 
     const localPath = path.join(FOLDER_PATH, uuidv4());
@@ -153,6 +159,7 @@ class FilesController {
 
   static async getFile(req, res) {
     const fileId = req.params.id;
+    const size = req.query.size;
     const file = await dbClient.filesCollection.findOne({ _id: new ObjectId(fileId) });
 
     if (!file) {
@@ -173,7 +180,11 @@ class FilesController {
       return res.status(400).json({ error: "A folder doesn't have content" });
     }
 
-    const filePath = path.join(FOLDER_PATH, file.localPath);
+    let filePath = path.join(FOLDER_PATH, file.localPath);
+    if (size) {
+      filePath = `${filePath}_${size}`;
+    }
+
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'Not found' });
     }
